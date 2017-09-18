@@ -21,8 +21,9 @@ from torch.autograd import Variable
 import requests
 import seaborn as sns;
 import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 import numpy as np
-
+import math
 
 sns.set()
 use_cuda = torch.cuda.is_available()
@@ -30,6 +31,12 @@ LABELS_URL = 'https://s3.amazonaws.com/outcome-blog/imagenet/labels.json'
 
 print("=====>Loading model...")
 vgg11 = models.vgg11(pretrained=True)
+
+convnet = [[3,1,1], [2,2,0], [3,1,1], [2,2,0], [3,1,1], [3,1,1], [2,2,0], [3,1,1], [3,1,1], [2,2,0], [3,1,1], [3,1,1], [2,2,0], [7,1,0], [1,1,0], [1,1,0]]
+layer_names = ['conv1', 'pool1', 'conv2', 'pool2', 'conv3', 'conv4', 'pool3','conv5', 'conv6', 'pool4', 'conv7', 'conv8', 'pool5', 'conv9', 'conv10', 'conv11']
+imsize = 700
+
+
 vgg11_head = nn.Sequential(*list(vgg11.children())[:-1])
 class Fully_Conv_Vgg(nn.Module):
 	def __init__(self):
@@ -85,6 +92,53 @@ preprocess2 = transforms.Compose([
 # maxpool layer is filter with kernal size 2 and stride 2
 # start(in) + 1*1 + 1*2 + 1*4 + 1*4 + 1*8 + 1*8 + 1*16+1*16 = 59
 
+
+
+def outFromIn(conv, layerIn):
+  n_in = layerIn[0]
+  j_in = layerIn[1]
+  r_in = layerIn[2]
+  start_in = layerIn[3]
+  k = conv[0]
+  s = conv[1]
+  p = conv[2]
+  
+  n_out = math.floor((n_in - k + 2*p)/s) + 1
+  actualP = (n_out-1)*s - n_in + k 
+  pR = math.ceil(actualP/2)
+  pL = math.floor(actualP/2)
+  
+  j_out = j_in * s
+  r_out = r_in + (k - 1)*j_in
+  start_out = start_in + ((k-1)/2 - pL)*j_in
+  return n_out, j_out, r_out, start_out
+  
+def printLayer(layer, layer_name, ):
+  print(layer_name + ":")
+  print("\t n features: %s \n \t jump: %s \n \t receptive size: %s \t start: %s " % (layer[0], layer[1], layer[2], layer[3]))
+ 
+def receptive_field(idx_x, idx_y):
+  layerInfos=[]
+  #first layer is the data layer (image) with n_0 = image size; j_0 = 1; r_0 = 1; and start_0 = 0.5
+  print ("-------Net summary------")
+  currentLayer = [imsize, 1, 1, 0.5]
+  printLayer(currentLayer, "input image")
+  for i in range(len(convnet)):
+    currentLayer = outFromIn(convnet[i], currentLayer)
+    layerInfos.append(currentLayer)
+    printLayer(currentLayer, layer_names[i])
+  print ("------------------------")
+
+  
+  n = layerInfos[-1][0]
+  j = layerInfos[-1][0]
+  r = layerInfos[-1][2]
+  start = layerInfos[-1][3]
+
+
+  return (start+idx_x*j, start+idx_y*j, r)
+
+  
 print("=====>Loading image...")
 #image = Image.open('./data/input2.jpeg')
 image = Image.open('./data/input5.jpg')
@@ -99,13 +153,24 @@ outputs = model(image)
 heatmap = outputs.data.cpu().numpy()
 cat_heatmap = heatmap[:,285,:,:]
 cat_heatmap = cat_heatmap.reshape(15,15)
+
+(idx_x, idx_y) = np.unravel_index(cat_heatmap.argmax(), cat_heatmap.shape)
+(mid_x, mid_y, r) = receptive_field(idx_x, idx_y)
+print("mid_x: " + str(mid_x) + " mid_y: " + str(mid_y)+" with size: " + str(r))
+
+
+
+
 plt.figure(1)
 ax = sns.heatmap(cat_heatmap)
 
-plt.figure(2)
-im = Variable(im2).data.cpu().numpy()
-plt.imshow(np.transpose(im,(1,2,0)))
+fig2 = plt.figure(2)
+ax = fig2.add_subplot(111, aspect='equal')
 
+im = Variable(im2).data.cpu().numpy()
+ax.imshow(np.transpose(im,(1,2,0)))
+rect = patches.Rectangle((mid_x-r/2, mid_y-r/2), r, r, linewidth=2, edgecolor='r',facecolor='none')
+ax.add_patch(rect)
 plt.show()
 
 
