@@ -84,16 +84,17 @@ class Two_Branch_Net(nn.Module):
             nn.Conv2d(4096, 4096, kernel_size=1),
 			nn.ReLU(inplace=True),
             nn.Dropout(),
-            nn.Conv2d(4096, 6, kernel_size=1)
+            nn.Conv2d(4096, 4, kernel_size=1)
 			)
 
 	def forward(self, x):
 		out = self.base_model(x)
-		# out = out.view(out.size(0), -1)
+		
 		out1 = self.classifier(out)
 		out2 = self.classifier_shape(out)
 		out1 = out1.view(out1.size(0), out1.size(1))
 		out2 = out2.view(out2.size(0), out2.size(1))
+
 
 		return out1, out2
 

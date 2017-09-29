@@ -50,15 +50,13 @@ class Two_Branch_Net(nn.Module):
             nn.Conv2d(4096, 4096, kernel_size=1),
 			nn.ReLU(inplace=True),
             nn.Dropout(),
-            nn.Conv2d(4096, 6, kernel_size=1)
+            nn.Conv2d(4096, 4, kernel_size=1)
 			)
 
 	def forward(self, x):
 		out = self.base_model(x)
-		# out = out.view(out.size(0), -1)
 		out1 = self.classifier(out)
 		out2 = self.classifier_shape(out)
-		print(out1)
 		out1 = out1.view(out1.size(1), out1.size(2)*out1.size(3))
 		out2 = out2.view(out2.size(1), out2.size(2)*out2.size(3))
 
@@ -203,30 +201,33 @@ image = image.cuda()
 outputs, outputs_shape = model(image)
 
 heatmap = outputs.data.cpu().numpy()
+heatmap_shape = outputs_shape.data.cpu().numpy()
 # 285 corresponds to the class index of cat
 # you can change it to other class if you are not detecting cat
-cat_heatmap = heatmap[6,:]
-cat_heatmap = cat_heatmap.reshape(9,14)
+heatmap = heatmap[13,:]
+heatmap = heatmap.reshape(9,14)
+heatmap_shape = heatmap_shape.reshape(4,9,14)
 
 #pick the largest response of heatmap but you can change it to a threshold here
-(idx_x, idx_y) = np.unravel_index(cat_heatmap.argmax(), cat_heatmap.shape)
+(idx_x, idx_y) = np.unravel_index(heatmap.argmax(), heatmap.shape)
 (mid_x, mid_y, r) = receptive_field(idx_y, idx_x)
 print("idx_x: " + str(idx_x) + "idx_y: " + str(idx_y))
 print("mid_x: " + str(mid_x) + " mid_y: " + str(mid_y)+" with size: " + str(r))
 
 r=100
 
+print("shape prediction: "+ str(heatmap_shape[:,idx_x, idx_y]))
 
 fig1 = plt.figure(1)
 ax = fig1.add_subplot(211, aspect='equal')
-sns.heatmap(cat_heatmap)
+sns.heatmap(heatmap)
 
 ax = fig1.add_subplot(212, aspect='equal')
 
 im = Variable(im2).data.cpu().numpy()
 ax.imshow(np.transpose(im,(1,2,0)))
-rect = patches.Rectangle((mid_x-r/2, mid_y-r/2), r, r, linewidth=2, edgecolor='r',facecolor='none')
-ax.add_patch(rect)
+# rect = patches.Rectangle((mid_x-r/2, mid_y-r/2), r, r, linewidth=2, edgecolor='r',facecolor='none')
+# ax.add_patch(rect)
 plt.show()
 
 
